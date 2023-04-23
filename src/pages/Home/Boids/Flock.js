@@ -6,6 +6,8 @@ import Vector from "../../../utils/math/Vector";
 class Flock extends Component {
   constructor(props) {
     super(props);
+    this.maxForce = 0.2;
+    this.maxSpeed = 5;
     this.state = {
       flock: this.initialiseFlock(),
     };
@@ -13,7 +15,7 @@ class Flock extends Component {
 
   initialiseFlock() {
     let arr = [];
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 250; i++) {
       let xPos = Math.floor(Math.random() * window.innerWidth);
       let yPos = Math.floor(Math.random() * window.innerHeight);
 
@@ -30,63 +32,124 @@ class Flock extends Component {
   updateFlock() {
     const newFlock = this.state.flock.map((boid) => {
       let v1 = this.cohesion(boid);
-
-      let v2 = this.separation(boid);
-      let v3 = this.alignment(boid);
+      let v2 = this.separation(boid).scaleBy(1.5);
+      let v3 = this.align(boid);
 
       boid.acc = boid.acc.add(v1);
       boid.acc = boid.acc.add(v2);
       boid.acc = boid.acc.add(v3);
       boid.vel = boid.vel.add(boid.acc);
-      this.limitVelocity(boid);
+      boid.vel = boid.vel.limit(this.maxSpeed);
+
+      boid.pos = this.edges(boid);
 
       return {
         pos: boid.pos.add(boid.vel),
         vel: boid.vel,
-        acc: boid.acc,
+        acc: new Vector(0, 0),
       };
     });
     this.setState({ flock: newFlock });
   }
 
+  edges(boid) {
+    if (boid.pos.components[0] > window.innerWidth) {
+      return new Vector(0, boid.pos.components[1]);
+    } else if (boid.pos.components[0] < 0) {
+      return new Vector(window.innerWidth, boid.pos.components[1]);
+    }
+
+    if (boid.pos.components[1] > window.innerHeight) {
+      return new Vector(boid.pos.components[0], 0);
+    } else if (boid.pos.components[1] < 0) {
+      return new Vector(boid.pos.components[0], window.innerHeight);
+    }
+
+    return boid.pos;
+  }
+
   cohesion(current) {
-    let pc = new Vector(0, 0);
+    let perceptionRadius = 50;
+    let steering = new Vector(0, 0);
+    let total = 0;
+
     this.state.flock.forEach((boid) => {
-      if (boid !== current) {
-        pc = pc.add(boid.pos);
+      let d = Math.hypot(
+        boid.pos.components[0] - current.pos.components[0],
+        boid.pos.components[1] - current.pos.components[1]
+      );
+
+      if (boid !== current && d < perceptionRadius) {
+        steering = steering.add(boid.pos);
+        total++;
       }
     });
 
-    pc = pc.scaleBy(1 / (this.state.flock.length - 1));
-    return pc.sub(current.pos).scaleBy(1 / 100);
+    if (total > 0) {
+      steering = steering.scaleBy(1 / total);
+      steering = steering.sub(current.pos);
+      steering = steering.withLength(this.maxSpeed);
+      steering = steering.sub(current.vel);
+      steering = steering.limit(this.maxForce);
+    }
+
+    return steering;
   }
 
   separation(current) {
-    let c = new Vector(0, 0);
+    let perceptionRadius = 24;
+    let steering = new Vector(0, 0);
+    let total = 0;
 
     this.state.flock.forEach((boid) => {
-      if (boid !== current) {
-        if (Math.abs(boid.pos.sub(current.pos).length()) < 100) {
-          c = c.sub(boid.pos.sub(current.pos));
-        }
+      let d = Math.hypot(
+        boid.pos.components[0] - current.pos.components[0],
+        boid.pos.components[1] - current.pos.components[1]
+      );
+
+      if (boid !== current && d < perceptionRadius) {
+        let diff = current.pos.sub(boid.pos);
+        diff = diff.scaleBy(1 / (d * d));
+        steering = steering.add(diff);
+        total++;
       }
     });
 
-    return c;
+    if (total > 0) {
+      steering = steering.scaleBy(1 / total);
+      steering = steering.withLength(this.maxSpeed);
+      steering = steering.sub(current.vel);
+      steering = steering.limit(this.maxForce);
+    }
+
+    return steering;
   }
 
-  alignment(current) {
-    let pv = new Vector(0, 0);
+  align(current) {
+    let perceptionRadius = 25;
+    let steering = new Vector(0, 0);
+    let total = 0;
 
     this.state.flock.forEach((boid) => {
-      if (boid !== current) {
-        pv = pv.add(boid.vel);
+      let d = Math.hypot(
+        boid.pos.components[0] - current.pos.components[0],
+        boid.pos.components[1] - current.pos.components[1]
+      );
+
+      if (boid !== current && d < perceptionRadius) {
+        steering = steering.add(boid.vel);
+        total++;
       }
     });
 
-    pv = pv.scaleBy(1 / (this.state.flock.length - 1));
+    if (total > 0) {
+      steering = steering.scaleBy(1 / total);
+      steering = steering.withLength(this.maxSpeed);
+      steering = steering.sub(current.vel);
+      steering = steering.limit(this.maxForce);
+    }
 
-    return pv.sub(current.vel).scaleBy(1 / 8);
+    return steering;
   }
 
   limitVelocity(boid) {
@@ -112,7 +175,7 @@ class Flock extends Component {
       return <Boid key={index} pos={boid.pos} vel={boid.vel} />;
     });
 
-    return <div>{boids}</div>;
+    return <div id="content">{boids}</div>;
   }
 }
 

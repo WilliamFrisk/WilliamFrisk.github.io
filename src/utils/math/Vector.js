@@ -62,6 +62,14 @@ class Vector {
     const normalized = other.normalize();
     return normalized.scaleBy(this.dotProduct(normalized));
   }
+
+  limit(limit) {
+    if (this.length() > limit) {
+      return this.withLength(limit);
+    } else {
+      return this;
+    }
+  }
 }
 
 export default Vector;
